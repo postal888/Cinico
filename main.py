@@ -1,28 +1,11 @@
 #!/usr/bin/env python3
 import os
 from dotenv import load_dotenv
-from searcher import search_tweets
+from fetcher import fetch_tweet
 from drafter import draft_replies
 from poster import post_reply
 
 load_dotenv()
-
-
-def pick_index(count: int, prompt: str) -> int | None:
-    print(f"\n[s] skip  [q] quit")
-    choice = input(f"{prompt}: ").strip().lower()
-    if choice == "q":
-        raise SystemExit
-    if choice == "s":
-        return None
-    try:
-        idx = int(choice) - 1
-        if 0 <= idx < count:
-            return idx
-    except ValueError:
-        pass
-    print("Invalid choice, skipping.")
-    return None
 
 
 def main():
@@ -30,52 +13,59 @@ def main():
         print("ERROR: ANTHROPIC_API_KEY not set in .env")
         return
 
-    print("Searching Twitter...")
-    tweets = search_tweets(max_results=10)
-    if not tweets:
-        print("No tweets found.")
+    url = input("Paste tweet URL or ID: ").strip()
+    if not url:
         return
 
-    print(f"\nFound {len(tweets)} tweets. Pick one to reply to:\n")
-    for i, t in enumerate(tweets, 1):
-        metrics = f"♥{t['likes']} RT{t['retweets']}"
-        preview = t["text"][:80].replace("\n", " ")
-        print(f"[{i}] {t['author']}  {metrics}")
-        print(f"    {preview}")
-        print()
-
-    idx = pick_index(len(tweets), "Choose tweet")
-    if idx is None:
+    print("Fetching tweet...")
+    try:
+        tweet = fetch_tweet(url)
+    except Exception as e:
+        print(f"Error: {e}")
         return
 
-    tweet = tweets[idx]
-    print(f"\nSelected: {tweet['url']}")
-    print(f'"{tweet["text"][:200]}"')
+    print(f"\n{tweet['author']}  ♥{tweet['likes']} RT{tweet['retweets']}")
+    print(f'"{tweet["text"]}"')
 
     print("\nDrafting replies...")
-    drafts = draft_replies(tweet)
+    try:
+        drafts = draft_replies(tweet)
+    except Exception as e:
+        print(f"Draft error: {e}")
+        return
+
     if not drafts:
-        print("Draft generation failed.")
+        print("No drafts generated.")
         return
 
-    print("\nPick a reply:\n")
+    print()
     for i, d in enumerate(drafts, 1):
-        print(f"[{i}] {d}")
-        print()
+        print(f"[{i}] {d}\n")
 
-    idx = pick_index(len(drafts), "Choose reply")
-    if idx is None:
+    print("[s] skip  [q] quit")
+    choice = input("Choose reply: ").strip().lower()
+    if choice in ("q", "s", ""):
+        print("Aborted.")
         return
 
-    chosen = drafts[idx]
-    confirm = input(f'\nPost this reply?\n"{chosen}"\n[y/n]: ').strip().lower()
+    try:
+        idx = int(choice) - 1
+        chosen = drafts[idx]
+    except (ValueError, IndexError):
+        print("Invalid choice.")
+        return
+
+    confirm = input(f'\nPost this?\n"{chosen}"\n[y/n]: ').strip().lower()
     if confirm != "y":
         print("Aborted.")
         return
 
     print("Posting...")
-    url = post_reply(chosen, tweet["id"])
-    print(f"Posted: {url}")
+    try:
+        url_out = post_reply(chosen, tweet["id"])
+        print(f"Posted: {url_out}")
+    except Exception as e:
+        print(f"Post error: {e}")
 
 
 if __name__ == "__main__":
