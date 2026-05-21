@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
 from dotenv import load_dotenv
+from searcher import search_tweets
 from fetcher import fetch_tweet
 from drafter import draft_replies
 from poster import post_reply
@@ -13,20 +14,38 @@ def main():
         print("ERROR: ANTHROPIC_API_KEY not set in .env")
         return
 
-    url = input("Paste tweet URL or ID: ").strip()
-    if not url:
-        return
+    print("Searching Twitter...")
+    tweets = search_tweets(max_results=10)
 
-    print("Fetching tweet...")
+    if not tweets:
+        print("\nSearch failed. Paste a tweet URL manually instead.")
+        url = input("Tweet URL or ID: ").strip()
+        if not url:
+            return
+        try:
+            tweets = [fetch_tweet(url)]
+        except Exception as e:
+            print(f"Error: {e}")
+            return
+
+    print(f"\nFound {len(tweets)} tweets:\n")
+    for i, t in enumerate(tweets, 1):
+        preview = t["text"][:80].replace("\n", " ")
+        print(f"[{i}] {t['author']}")
+        print(f"    {preview}")
+        print()
+
+    print("[q] quit")
+    choice = input("Choose tweet: ").strip().lower()
+    if choice == "q" or not choice:
+        return
     try:
-        tweet = fetch_tweet(url)
-    except Exception as e:
-        print(f"Error: {e}")
+        tweet = tweets[int(choice) - 1]
+    except (ValueError, IndexError):
+        print("Invalid choice.")
         return
 
-    print(f"\n{tweet['author']}  ♥{tweet['likes']} RT{tweet['retweets']}")
-    print(f'"{tweet["text"]}"')
-
+    print(f'\n"{tweet["text"]}"')
     print("\nDrafting replies...")
     try:
         drafts = draft_replies(tweet)
@@ -47,10 +66,8 @@ def main():
     if choice in ("q", "s", ""):
         print("Aborted.")
         return
-
     try:
-        idx = int(choice) - 1
-        chosen = drafts[idx]
+        chosen = drafts[int(choice) - 1]
     except (ValueError, IndexError):
         print("Invalid choice.")
         return
