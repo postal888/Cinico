@@ -1,28 +1,27 @@
 #!/usr/bin/env python3
 import os
 from dotenv import load_dotenv
-from fetcher import fetch_news
-from drafter import draft_tweets
-from poster import post_tweet
+from searcher import search_tweets
+from drafter import draft_replies
+from poster import post_reply
 
 load_dotenv()
 
 
-def pick(options: list[str], prompt: str) -> str | None:
-    for i, opt in enumerate(options, 1):
-        print(f"\n[{i}] {opt}")
-    print("\n[s] skip  [q] quit")
-    choice = input(f"\n{prompt}: ").strip().lower()
+def pick_index(count: int, prompt: str) -> int | None:
+    print(f"\n[s] skip  [q] quit")
+    choice = input(f"{prompt}: ").strip().lower()
     if choice == "q":
-        return "quit"
+        raise SystemExit
     if choice == "s":
         return None
     try:
         idx = int(choice) - 1
-        if 0 <= idx < len(options):
-            return options[idx]
+        if 0 <= idx < count:
+            return idx
     except ValueError:
         pass
+    print("Invalid choice, skipping.")
     return None
 
 
@@ -31,44 +30,51 @@ def main():
         print("ERROR: ANTHROPIC_API_KEY not set in .env")
         return
 
-    print("Fetching news...")
-    items = fetch_news(max_items=5)
-    if not items:
-        print("No news fetched. Check feed URLs.")
+    print("Searching Twitter...")
+    tweets = search_tweets(max_results=10)
+    if not tweets:
+        print("No tweets found.")
         return
 
-    titles = [item["title"] for item in items]
-    print(f"\nFound {len(items)} items. Pick one to draft tweets for:")
-    chosen_title = pick(titles, "Choose item")
-    if chosen_title == "quit":
-        return
-    if chosen_title is None:
-        print("Nothing selected.")
+    print(f"\nFound {len(tweets)} tweets. Pick one to reply to:\n")
+    for i, t in enumerate(tweets, 1):
+        metrics = f"♥{t['likes']} RT{t['retweets']}"
+        preview = t["text"][:80].replace("\n", " ")
+        print(f"[{i}] {t['author']}  {metrics}")
+        print(f"    {preview}")
+        print()
+
+    idx = pick_index(len(tweets), "Choose tweet")
+    if idx is None:
         return
 
-    item = next(i for i in items if i["title"] == chosen_title)
+    tweet = tweets[idx]
+    print(f"\nSelected: {tweet['url']}")
+    print(f'"{tweet["text"][:200]}"')
 
-    print("\nDrafting tweets...")
-    drafts = draft_tweets(item)
+    print("\nDrafting replies...")
+    drafts = draft_replies(tweet)
     if not drafts:
         print("Draft generation failed.")
         return
 
-    print("\nPick a tweet to post:")
-    chosen_tweet = pick(drafts, "Choose tweet")
-    if chosen_tweet == "quit":
-        return
-    if chosen_tweet is None:
-        print("Nothing posted.")
+    print("\nPick a reply:\n")
+    for i, d in enumerate(drafts, 1):
+        print(f"[{i}] {d}")
+        print()
+
+    idx = pick_index(len(drafts), "Choose reply")
+    if idx is None:
         return
 
-    confirm = input(f'\nPost this?\n"{chosen_tweet}"\n[y/n]: ').strip().lower()
+    chosen = drafts[idx]
+    confirm = input(f'\nPost this reply?\n"{chosen}"\n[y/n]: ').strip().lower()
     if confirm != "y":
         print("Aborted.")
         return
 
     print("Posting...")
-    url = post_tweet(chosen_tweet)
+    url = post_reply(chosen, tweet["id"])
     print(f"Posted: {url}")
 
 

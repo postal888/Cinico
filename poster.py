@@ -12,8 +12,11 @@ def get_client() -> tweepy.Client:
     )
 
 
-def post_tweet(text: str) -> str:
+def post_reply(text: str, in_reply_to_tweet_id: str) -> str:
     client = get_client()
-    response = client.create_tweet(text=text)
+    response = client.create_tweet(
+        text=text,
+        in_reply_to_tweet_id=in_reply_to_tweet_id,
+    )
     tweet_id = response.data["id"]
     return f"https://twitter.com/i/web/status/{tweet_id}"
